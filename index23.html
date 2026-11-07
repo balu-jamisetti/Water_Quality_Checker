@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AquaSense | Water Quality Dashboard</title>
+<style>
+:root{--bg:#071426;--panel:#10223a;--line:#29415e;--text:#edf5ff;--muted:#9db0c9;--cyan:#36d6e7;--green:#39d98a;--red:#ff647c;--amber:#ffc45c}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 15% 0%,#15345a,transparent 45%),var(--bg);color:var(--text);font:15px/1.5 system-ui,Segoe UI,Arial}.hidden{display:none!important}.shell{max-width:1350px;margin:auto;padding:26px}.top,.hero,.head,.row{display:flex;align-items:center;justify-content:space-between;gap:15px}.top{margin-bottom:28px}.brand{display:flex;align-items:center;gap:12px}.logo{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,var(--cyan),#5898ff);display:grid;place-items:center;color:#071426;font-weight:900;font-size:24px}.brand h1{font-size:21px;margin:0}.brand p,.sub{color:var(--muted);font-size:12px;margin:2px 0}.panel{background:linear-gradient(155deg,#122741,#0e1d31);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 15px 45px #0003}.layout{display:grid;grid-template-columns:1.5fr .8fr;gap:17px}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:11px}.metric{background:#09192c;border:1px solid #233b57;border-radius:14px;padding:15px;min-height:115px}.metric small{color:var(--muted)}.value{font-size:27px;font-weight:850;margin-top:9px}.unit{font-size:12px;color:var(--muted)}.btn{border:0;border-radius:11px;padding:11px 16px;background:linear-gradient(120deg,#31d2df,#5898ff);color:#041426;font-weight:800;cursor:pointer}.btn.secondary{background:#1a2d46;color:var(--text);border:1px solid var(--line)}.btn:disabled{opacity:.5;cursor:wait}.pill,.tag{border:1px solid var(--line);border-radius:999px;padding:6px 10px;color:var(--muted);font-size:11px}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--amber);margin-right:6px}.dot.online{background:var(--green)}.result{margin-top:15px;background:#09192c;border:1px solid #233b57;border-radius:14px;padding:15px}.resultstate{font-size:19px;font-weight:850}.tag.good{background:#123d32;color:#78f0b4}.tag.bad{background:#492331;color:#ff9bab}.notice{font-size:11px;color:var(--muted);margin-top:9px}.warning{margin-top:12px;border-left:3px solid var(--amber);background:#2b261b;color:#ead6a7;padding:10px;border-radius:5px;font-size:11px}.tablewrap{overflow:auto}table{border-collapse:collapse;width:100%;min-width:800px;font-size:12px}th,td{text-align:left;padding:11px 9px;border-bottom:1px solid #233b57;white-space:nowrap}th{color:var(--muted)}.empty{text-align:center;color:var(--muted);padding:25px}.history{margin-top:17px}.authscreen{min-height:100vh;display:grid;place-items:center;padding:20px}.authcard{width:min(420px,100%);background:var(--panel);border:1px solid var(--line);padding:27px;border-radius:20px}.authcard h2{margin:22px 0 3px}.authcard p{color:var(--muted);font-size:13px}.field{margin:14px 0}.field label{display:block;color:var(--muted);font-size:11px;margin-bottom:5px}.field input{width:100%;padding:12px;border-radius:9px;border:1px solid var(--line);background:#081729;color:white}.error{color:#ff91a2;font-size:12px;min-height:18px}.footer{text-align:center;color:#7186a0;font-size:11px;margin:20px}.spin{display:inline-block;width:13px;height:13px;border:2px solid #fff6;border-top-color:white;border-radius:50%;animation:s .8s linear infinite}@keyframes s{to{transform:rotate(360deg)}}@media(max-width:850px){.layout{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}}@media(max-width:550px){.shell{padding:14px}.top{align-items:flex-start}.metrics{gap:7px}.metric{padding:11px}.value{font-size:22px}.hero{align-items:flex-start;flex-direction:column}}
+</style>
+</head>
+<body>
+<section id="loginView" class="authscreen"><div class="authcard">
+<div class="brand"><div class="logo">A</div><div><h1>AquaSense</h1><p>Smart water quality monitoring</p></div></div>
+<h2>Welcome back</h2><p>Sign in with your Firebase Authentication account.</p>
+<form id="loginForm"><div class="field"><label>EMAIL ADDRESS</label><input id="email" type="email" autocomplete="username" required></div><div class="field"><label>PASSWORD</label><input id="password" type="password" autocomplete="current-password" required></div><button id="loginBtn" class="btn" style="width:100%">Sign in to dashboard</button><div id="loginError" class="error"></div></form>
+</div></section>
+<main id="dashboardView" class="shell hidden">
+<header class="top"><div class="brand"><div class="logo">A</div><div><h1>AquaSense</h1><p>WATER QUALITY MONITOR · DEVICE KIT1</p></div></div><div class="row"><span class="pill"><span id="dot" class="dot"></span><span id="connection">Connecting</span></span><button id="logout" class="btn secondary">Sign out</button></div></header>
+<div class="hero"><div><h2>Water quality overview</h2><div class="sub">Live readings, on-demand testing and complete test history.</div></div><div class="row"><button id="testBtn" class="btn">▶ Test water now</button><span id="testMessage" class="sub">Ready</span></div></div>
+<div class="layout">
+<section class="panel"><div class="head"><div><b>Live measurements</b><div class="sub">Latest values received from ESP32</div></div><span id="updated" class="tag">Waiting for data</span></div>
+<div class="metrics">
+<div class="metric"><small>pH LEVEL</small><div id="ph" class="value">--</div><small>Screening range 6.5–8.5</small></div>
+<div class="metric"><small>TDS</small><div id="tds" class="value">-- <span class="unit">ppm</span></div><small>Reference ≤ 500 ppm</small></div>
+<div class="metric"><small>TEMPERATURE</small><div id="temp" class="value">-- <span class="unit">°C</span></div><small>DS18B20</small></div>
+<div class="metric"><small>DEVICE</small><div id="device" class="value" style="font-size:20px">--</div><small>ESP32 status</small></div></div>
+<div class="result"><div class="row"><div><div class="sub">LATEST TEST ASSESSMENT</div><div id="result" class="resultstate">No test result yet</div></div><span id="resultTag" class="tag">NOT TESTED</span></div><div id="details" class="notice">Press Test water now to request a fresh measurement.</div></div>
+<div class="warning">Important: pH and TDS alone cannot prove that water is safe to drink. Microbiological contamination, heavy metals and other chemicals require suitable laboratory tests. This is a screening dashboard, not drinking-water certification.</div>
+</section>
+<aside class="panel"><b>Test control</b><div class="sub">Request a fresh test from your ESP32.</div><p class="sub" style="line-height:1.8;margin-top:16px">The website sends a command to Firebase. Your ESP32 firmware must poll that command, read the sensors, evaluate the configured screening limits, activate the buzzer on a failed screening, and write the completed result back to Firebase.</p>
+<div class="result"><div class="sub">LAST REQUEST</div><b id="lastRequest">No request sent</b></div><div class="result"><div class="sub">BUZZER REPORT</div><b id="buzzer">Waiting for result</b></div></aside>
+</div>
+<section class="panel history"><div class="head"><div><b>Test history</b><div class="sub">Latest 50 records · recorded parameters and assessment</div></div><button id="refresh" class="btn secondary">Refresh history</button></div>
+<div class="tablewrap"><table><thead><tr><th>DATE / TIME</th><th>pH</th><th>TDS ppm</th><th>TEMP °C</th><th>pH V</th><th>TDS V</th><th>SCREENING</th><th>BUZZER</th></tr></thead><tbody id="history"><tr><td colspan="8" class="empty">Waiting for history…</td></tr></tbody></table></div></section>
+<div class="footer">AquaSense · ESP32 + ADS1115 + Firebase Realtime Database</div>
+</main>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import {getAuth,signInWithEmailAndPassword,onAuthStateChanged,signOut} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+import {getDatabase,ref,onValue,get,query,limitToLast,set} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
+
+const firebaseConfig={
+ apiKey:"AIzaSyDYk3cMeSRIwROTRmmECLW-WRDyEsVOnFo",
+ authDomain:"water-quality-checker-6fab2.firebaseapp.com",
+ databaseURL:"https://water-quality-checker-6fab2-default-rtdb.asia-southeast1.firebasedatabase.app",
+ projectId:"water-quality-checker-6fab2",
+ storageBucket:"water-quality-checker-6fab2.firebasestorage.app",
+ messagingSenderId:"44332075923",
+ appId:"1:44332075923:web:8ec9d5117253733a00b666"
+};
+const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getDatabase(app),base="devices/kit1";
+const $=id=>document.getElementById(id);let offStatus=null,offHistory=null,pendingId=null;
+const num=(v,n=2)=>v===null||v===undefined||!Number.isFinite(Number(v))?"--":Number(v).toFixed(n);
+const date=v=>{if(!v)return"--";const d=new Date(Number(v));return isNaN(d)?String(v):d.toLocaleString()};
+function classify(v){let r=String(v||"").toUpperCase();if(["PASS","WITHIN_LIMITS"].includes(r))return["WITHIN SCREENING LIMITS","good"];if(["FAIL","OUT_OF_LIMITS","NOT_DRINKABLE"].includes(r))return["OUTSIDE SCREENING LIMITS","bad"];return["NOT TESTED",""]}
+function paintStatus(s={}) {
+ $("ph").textContent=num(s.ph);$("tds").innerHTML=num(s.tds,0)+' <span class="unit">ppm</span>';$("temp").innerHTML=num(s.temperature,1)+' <span class="unit">°C</span>';
+ const online=s.deviceOnline===true;$("device").textContent=online?"ONLINE":"OFFLINE";$("device").style.color=online?"var(--green)":"var(--red)";
+ $("dot").classList.toggle("online",online);$("connection").textContent=online?"Database connected":"Waiting for device";$("updated").textContent=s.testedAt?"Updated "+date(s.testedAt):"Live status";
+ const [label,cls]=classify(s.result);$("result").textContent=label==="NOT TESTED"?"No test result yet":label;$("resultTag").textContent=label;$("resultTag").className="tag "+cls;
+ $("details").textContent=s.resultDetails||"Assessment is supplied by the ESP32 firmware."; $("buzzer").textContent=s.buzzerOn===true?"ALERT ACTIVE":"No buzzer alert reported";$("buzzer").style.color=s.buzzerOn===true?"var(--red)":"var(--muted)";
+ if(pendingId&&s.lastTestRequestId===pendingId){pendingId=null;$("testBtn").disabled=false;$("testBtn").textContent="▶ Test water now";$("testMessage").textContent="Test completed."}
+}
+function paintHistory(obj){
+ const body=$("history");body.replaceChildren();if(!obj){body.innerHTML='<tr><td colspan="8" class="empty">No test history available.</td></tr>';return}
+ const rows=Object.values(obj).reverse();if(!rows.length){body.innerHTML='<tr><td colspan="8" class="empty">No test history available.</td></tr>';return}
+ rows.forEach(r=>{const [label,cls]=classify(r.result),vals=[date(r.testedAt||r.timestamp),num(r.ph),num(r.tds,0),num(r.temperature,1),num(r.phModuleVoltage,3),num(r.tdsModuleVoltage,3),label,r.buzzerOn===true?"ON":"OFF"];const tr=document.createElement("tr");vals.forEach((v,i)=>{const td=document.createElement("td");td.textContent=v;if(i===6)td.style.color=cls==="good"?"var(--green)":cls==="bad"?"var(--red)":"var(--muted)";tr.append(td)});body.append(tr)})
+}
+function listen(){
+ if(offStatus)offStatus();if(offHistory)offHistory();
+ offStatus=onValue(ref(db,base+"/status"),s=>paintStatus(s.val()||{}),e=>console.error(e));
+ offHistory=onValue(query(ref(db,base+"/history"),limitToLast(50)),s=>paintHistory(s.val()),e=>console.error(e));
+}
+$("loginForm").addEventListener("submit",async e=>{e.preventDefault();$("loginError").textContent="";$("loginBtn").disabled=true;$("loginBtn").textContent="Signing in…";try{await signInWithEmailAndPassword(auth,$("email").value.trim(),$("password").value)}catch(err){$("loginError").textContent=err.message}finally{$("loginBtn").disabled=false;$("loginBtn").textContent="Sign in to dashboard"}});
+$("logout").addEventListener("click",()=>signOut(auth));
+onAuthStateChanged(auth,user=>{$("loginView").classList.toggle("hidden",!!user);$("dashboardView").classList.toggle("hidden",!user);if(user)listen();else{if(offStatus)offStatus();if(offHistory)offHistory();offStatus=offHistory=null}});
+$("testBtn").addEventListener("click",async()=>{
+ $("testBtn").disabled=true;$("testBtn").innerHTML='<span class="spin"></span> Sending…';$("testMessage").textContent="Sending request to ESP32…";
+ try{pendingId=crypto.randomUUID();const request={action:"RUN",requestId:pendingId,requestedAt:Date.now(),requestedBy:auth.currentUser?.email||"authenticated-user"};await set(ref(db,base+"/command"),request);$("lastRequest").textContent=date(request.requestedAt);$("testMessage").textContent="Request sent. Waiting for ESP32 measurement…";$("testBtn").innerHTML='<span class="spin"></span> Waiting…';setTimeout(()=>{if(pendingId){$("testMessage").textContent="No completion response yet. Check ESP32 command polling and Wi-Fi.";pendingId=null;$("testBtn").disabled=false;$("testBtn").textContent="▶ Test water now"}},30000)}
+ catch(err){$("testMessage").textContent="Request failed: "+err.message;$("testBtn").disabled=false;$("testBtn").textContent="▶ Test water now"}
+});
+$("refresh").addEventListener("click",async()=>{try{const s=await get(query(ref(db,base+"/history"),limitToLast(50)));paintHistory(s.val())}catch(e){console.error(e)}});
+</script>
+</body></html>
