@@ -394,14 +394,40 @@ const fmtTime = (ms) => ms ? new Date(Number(ms)).toLocaleString(undefined,
   { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }) : "--";
 const sourceName = (t) => t === "HARDWARE_BUTTON" ? "Kit button" : t === "WEBSITE" ? "Website" : (t || "--");
 
-function classify(raw) {
+
+function classify(raw, ph, tds) {
   const v = String(raw || "").toUpperCase();
-  if (v === "EXCELLENT" || v === "PASS" || v === "WITHIN_LIMITS") return "EXCELLENT";
+
+  // Use an existing Firebase classification when available.
+  if (v === "EXCELLENT") return "EXCELLENT";
   if (v === "AVERAGE") return "AVERAGE";
-  if (v === "POOR" || v === "FAIL" || v === "OUT_OF_LIMITS" || v === "NOT_DRINKABLE") return "POOR";
+  if (v === "NOT DRINKABLE" || v === "POOR") return "POOR";
   if (v === "SENSOR ERROR") return "SENSOR ERROR";
-  return "NONE";
+
+  // Fallback for older Firebase records without a result field.
+  const p = Number(ph);
+  const t = Number(tds);
+
+  if (!Number.isFinite(p) || !Number.isFinite(t) ||
+      p < 0 || p > 14 || t < 0) {
+    return "SENSOR ERROR";
+  }
+
+  if (p < 5 || p > 10.5 || t > 600) {
+    return "POOR";
+  }
+
+  if (p <= 6 || p > 8 || t >= 300) {
+    return "AVERAGE";
+  }
+
+  if (p > 6 && p <= 8 && t < 300) {
+    return "EXCELLENT";
+  }
+
+  return "SENSOR ERROR";
 }
+
 const META = {
   EXCELLENT: { word: "Excellent", cls: "good", hero: "s-good", level: 0.74 },
   AVERAGE: { word: "Average", cls: "warn", hero: "s-warn", level: 0.6 },
@@ -498,7 +524,7 @@ function paintHero() {
     $("heroSub").textContent = "The kit is reading pH, TDS and temperature.";
     setLevel(0.82);
   } else {
-    const label = rec ? classify(rec.result || rec.waterStatus) : "NONE";
+    const label = rec ? classify(rec.result || rec.waterStatus, rec.ph, rec.tds) : "NONE";
     const m = META[label];
     hero.classList.add(m.hero);
     $("verdict").textContent = m.word;
@@ -570,7 +596,7 @@ function paintHistory() {
     return;
   }
   rows.forEach((r) => {
-    const label = classify(r.result || r.waterStatus), m = META[label];
+    const label = classify(r.result || r.waterStatus, r.ph, r.tds), m = META[label];
     const ph = Number(r.ph), tds = Number(r.tds), t = Number(r.temperature);
     const cells = [
       ["Date and time", fmtTime(r.ts), ""],
@@ -603,7 +629,7 @@ function loadHistory(data) {
     .sort((a, b) => b.ts - a.ts);
   const newest = rows[0];
   if (historyReady && newest && newest.id !== lastNewestKey) {
-    toast(`New test from ${sourceName(newest.trigger).toLowerCase()}: ${META[classify(newest.result || newest.waterStatus)].word}`);
+    toast(`New test from ${sourceName(newest.trigger).toLowerCase()}: ${META[classify(newest.result || newest.waterStatus, newest.ph, newest.tds)].word}`);
   }
   historyReady = true;
   lastNewestKey = newest ? newest.id : null;
@@ -677,7 +703,7 @@ $("exportBtn").addEventListener("click", () => {
     const ph = Number(r.ph), tds = Number(r.tds), t = Number(r.temperature);
     lines.push([new Date(r.ts).toISOString(), sourceName(r.trigger), okPh(ph) ? ph.toFixed(2) : "",
       okTds(tds) ? Math.round(tds) : "", okTemp(t) ? t.toFixed(1) : "",
-      META[classify(r.result || r.waterStatus)].word, r.buzzerOn === true ? "On" : "Off"].map(q).join(","));
+      META[classify(r.result || r.waterStatus, r.ph, r.tds)].word, r.buzzerOn === true ? "On" : "Off"].map(q).join(","));
   });
   const url = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
   const a = Object.assign(document.createElement("a"), { href: url, download: "aquasense-history.csv" });
