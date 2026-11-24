@@ -299,8 +299,8 @@ td.n{font-family:var(--display);font-variant-numeric:tabular-nums;font-weight:50
           <div class="inst-label">TDS<span>dissolved solids</span></div>
           <div class="inst-value num" id="tdsVal">--</div>
           <div class="scale tds"><b></b><b></b><b></b><span class="pin" id="tdsPin"></span></div>
-          <div class="ticks"><span class="l" style="left:0">0</span><span style="left:40%">400</span><span style="left:65%">650</span><span class="r" style="left:100%">1000+</span></div>
-          <p class="inst-note" style="margin-top:10px">Green is best, amber is acceptable, red is poor.</p>
+          <div class="ticks"><span class="l" style="left:0">0</span><span style="left:40%">500</span><span style="left:65%">800</span><span class="r" style="left:100%">1000+</span></div>
+          <p class="inst-note" style="margin-top:10px">Thresholds are used for the configured project classification.</p>
         </div>
         <div class="inst">
           <div class="inst-label">Temperature<span>DS18B20 probe</span></div>
@@ -360,7 +360,7 @@ const base = "devices/kit1";
 const $ = (id) => document.getElementById(id);
 
 // Same thresholds as the ESP32 firmware
-const T = { EXC_PH: 7.0, EXC_TDS: 400, AVG_PH: 7.5, AVG_TDS: 650 };
+const T = { HIGH_PH: 7.0, HIGH_TDS: 500, MOD_PH_MIN: 5.0, MOD_PH_MAX: 6.5, MOD_TDS_MIN: 500, MOD_TDS_MAX: 800, LOW_PH: 5.0, LOW_TDS: 800 };
 const ONLINE_WINDOW_MS = 20000;
 const REQUEST_TIMEOUT_MS = 45000;
 
@@ -396,56 +396,61 @@ const sourceName = (t) => t === "HARDWARE_BUTTON" ? "Kit button" : t === "WEBSIT
 
 
 function classify(raw, ph, tds) {
-  const v = String(raw || "").toUpperCase();
-
-  // Use an existing Firebase classification when available.
-  if (v === "EXCELLENT") return "EXCELLENT";
-  if (v === "AVERAGE") return "AVERAGE";
-  if (v === "NOT DRINKABLE" || v === "POOR") return "POOR";
-  if (v === "SENSOR ERROR") return "SENSOR ERROR";
-
-  // Fallback for older Firebase records without a result field.
-  const p = Number(ph);
-  const t = Number(tds);
+  // Always calculate the current rating from the measured values.
+  // This prevents old Firebase labels from overriding the agreed thresholds.
+  const p = (ph === null || ph === undefined || String(ph).trim() === "") ? NaN : Number(ph);
+  const t = (tds === null || tds === undefined || String(tds).trim() === "") ? NaN : Number(tds);
 
   if (!Number.isFinite(p) || !Number.isFinite(t) ||
       p < 0 || p > 14 || t < 0) {
-    return "SENSOR ERROR";
+    const v = String(raw || "").trim().toUpperCase();
+    if (v === "SENSOR ERROR" || v === "ERROR") return "SENSOR_ERROR";
+    return "SENSOR_ERROR";
   }
 
-  if (p < 5 || p > 10.5 || t > 600) {
-    return "POOR";
+  // Exact paired conditions agreed for AquaSense:
+  // Both conditions in a row must be true.
+  if (p >= T.HIGH_PH && t < T.HIGH_TDS) {
+    return "HIGHLY_RECOMMENDED";
   }
 
-  if (p <= 6 || p > 8 || t >= 300) {
-    return "AVERAGE";
+  if (p >= T.MOD_PH_MIN && p <= T.MOD_PH_MAX &&
+      t >= T.MOD_TDS_MIN && t <= T.MOD_TDS_MAX) {
+    return "MODERATELY_RECOMMENDED";
   }
 
-  if (p > 6 && p <= 8 && t < 300) {
-    return "EXCELLENT";
+  if (p < T.LOW_PH && t > T.LOW_TDS) {
+    return "NOT_RECOMMENDED";
   }
 
-  return "SENSOR ERROR";
+  return "OUT_OF_RANGE";
 }
 
 const META = {
-  EXCELLENT: { word: "Excellent", cls: "good", hero: "s-good", level: 0.74 },
-  AVERAGE: { word: "Average", cls: "warn", hero: "s-warn", level: 0.6 },
-  POOR: { word: "Poor", cls: "bad", hero: "s-bad", level: 0.46 },
-  "SENSOR ERROR": { word: "Sensor error", cls: "bad", hero: "s-bad", level: 0.3 },
+  HIGHLY_RECOMMENDED: { word: "Highly Recommended", cls: "good", hero: "s-good", level: 0.74 },
+  MODERATELY_RECOMMENDED: { word: "Moderately Recommended", cls: "warn", hero: "s-warn", level: 0.6 },
+  NOT_RECOMMENDED: { word: "Not Recommended", cls: "bad", hero: "s-bad", level: 0.3 },
+  OUT_OF_RANGE: { word: "Out of Range", cls: "warn", hero: "s-warn", level: 0.46 },
+  SENSOR_ERROR: { word: "Sensor Error", cls: "bad", hero: "s-bad", level: 0.3 },
   NONE: { word: "No test yet", cls: "none", hero: "s-none", level: 0.6 }
 };
 
 function explain(label, ph, tds) {
-  if (label === "EXCELLENT") return `Both readings are in the best band: pH under ${T.EXC_PH} and TDS under ${T.EXC_TDS} ppm.`;
-  if (label === "AVERAGE") return `Acceptable, but outside the best band of pH under ${T.EXC_PH} and TDS under ${T.EXC_TDS} ppm.`;
-  if (label === "POOR") {
-    const r = [];
-    if (okPh(ph) && ph >= T.AVG_PH) r.push(`pH ${ph.toFixed(2)} is at or above ${T.AVG_PH}`);
-    if (okTds(tds) && tds >= T.AVG_TDS) r.push(`TDS ${Math.round(tds)} ppm is at or above ${T.AVG_TDS}`);
-    return (r.length ? r.join(" and ") : "At least one reading is outside the acceptable range") + ".";
+  if (label === "HIGHLY_RECOMMENDED") {
+    return `pH is at least ${T.HIGH_PH} and TDS is below ${T.HIGH_TDS} ppm. Both high-rating conditions are satisfied.`;
   }
-  if (label === "SENSOR ERROR") return "A probe returned no valid reading. Check the wiring and probe connections.";
+  if (label === "MODERATELY_RECOMMENDED") {
+    return `pH is between ${T.MOD_PH_MIN} and ${T.MOD_PH_MAX}, and TDS is between ${T.MOD_TDS_MIN} and ${T.MOD_TDS_MAX} ppm.`;
+  }
+  if (label === "NOT_RECOMMENDED") {
+    return `pH is below ${T.LOW_PH} and TDS is above ${T.LOW_TDS} ppm. Both not-recommended conditions are satisfied.`;
+  }
+  if (label === "OUT_OF_RANGE") {
+    return "The pH and TDS combination does not match any of the three configured recommendation bands.";
+  }
+  if (label === "SENSOR_ERROR") {
+    return "A valid pH or TDS reading is missing. Check the probes, wiring and sensor connections.";
+  }
   return "Run a test from here, or press the BOOT button on the kit.";
 }
 
@@ -509,7 +514,7 @@ function paintLive() {
 function paintHero() {
   const hero = $("hero");
   let rec = rows[0];
-  if (!rec && lastStatus && classify(lastStatus.result || lastStatus.waterStatus) !== "NONE") {
+  if (!rec && lastStatus && lastStatus.ph !== undefined && lastStatus.ph !== null && lastStatus.tds !== undefined && lastStatus.tds !== null) {
     rec = { ph: lastStatus.ph, tds: lastStatus.tds, temperature: lastStatus.temperature,
             result: lastStatus.result || lastStatus.waterStatus, trigger: lastStatus.trigger,
             ts: Number(lastStatus.timestamp || 0) };
@@ -521,7 +526,7 @@ function paintHero() {
   if (measuring) {
     hero.classList.add("s-none");
     $("verdict").textContent = "Measuring";
-    $("heroSub").textContent = "The kit is reading pH, TDS and temperature.";
+    $("heroSub").textContent = "The kit is measuring pH, TDS and temperature.";
     setLevel(0.82);
   } else {
     const label = rec ? classify(rec.result || rec.waterStatus, rec.ph, rec.tds) : "NONE";
@@ -581,9 +586,9 @@ function paintCharts() {
   const tVals = tdsS.map((p) => p.v);
   lineChart($("tdsChart"), tdsS, {
     min: 0, max: Math.max(700, Math.max(...tVals, 0) * 1.1),
-    lines: [{ v: T.EXC_TDS, label: "400" }, { v: T.AVG_TDS, label: "650" }], fmt: (v) => Math.round(v) + " ppm", label: "TDS trend"
+    lines: [{ v: T.HIGH_TDS, label: "500" }, { v: T.MOD_TDS_MAX, label: "800" }], fmt: (v) => Math.round(v) + " ppm", label: "TDS trend"
   });
-  $("tdsTrendSub").textContent = tdsS.length ? `Dashed lines mark 400 and 650 ppm. Latest ${Math.round(tVals[tVals.length - 1])} ppm.` : "Oldest to newest";
+  $("tdsTrendSub").textContent = tdsS.length ? `Dashed lines mark 500 and 800 ppm. Latest ${Math.round(tVals[tVals.length - 1])} ppm.` : "Oldest to newest";
 }
 
 /* ---------- history table ---------- */
